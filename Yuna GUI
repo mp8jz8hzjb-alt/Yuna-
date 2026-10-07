@@ -1,0 +1,109 @@
+-- Delta에서 실행할 코드
+-- Yuna GUI + 시야각(FOV) 120 고정
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+
+-- ★ 실행 시 FOV를 120으로 고정
+local Camera = workspace.CurrentCamera
+if Camera then
+    Camera.FieldOfView = 120
+end
+workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
+    local cam = workspace.CurrentCamera
+    if cam then cam.FieldOfView = 120 end
+end)
+
+-- GUI 생성
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "Yuna GUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = game.CoreGui
+
+-- 사운드
+local Sound = Instance.new("Sound")
+Sound.Name = "Yuna GUI Sound"
+Sound.SoundId = "rbxassetid://128522658645123"
+Sound.Volume = 2
+Sound.Looped = false
+Sound.Parent = ScreenGui
+
+-- 메인 프레임
+local Frame = Instance.new("Frame")
+Frame.Size = UDim2.new(0, 300, 0, 220)
+Frame.Position = UDim2.new(0.5, -150, 0.5, -110)
+Frame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+Frame.BorderSizePixel = 0
+Frame.Active = false
+Frame.Parent = ScreenGui
+
+local FrameCorner = Instance.new("UICorner")
+FrameCorner.CornerRadius = UDim.new(0, 8)
+FrameCorner.Parent = Frame
+
+local FrameStroke = Instance.new("UIStroke")
+FrameStroke.Thickness = 1
+FrameStroke.Color = Color3.fromRGB(80, 80, 80)
+FrameStroke.Parent = Frame
+
+-- 타이틀 바 (드래그용)
+local TitleBar = Instance.new("Frame")
+TitleBar.Size = UDim2.new(1, 0, 0, 30)
+TitleBar.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+TitleBar.BorderSizePixel = 0
+TitleBar.Active = true
+TitleBar.Parent = Frame
+
+local TitleCorner = Instance.new("UICorner")
+TitleCorner.CornerRadius = UDim.new(0, 8)
+TitleCorner.Parent = TitleBar
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, -40, 1, 0)
+Title.Position = UDim2.new(0, 10, 0, 0)
+Title.BackgroundTransparency = 1
+Title.Text = "Yuna GUI"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextSize = 14
+Title.Font = Enum.Font.GothamBold
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.Parent = TitleBar
+
+-- 닫기 버튼
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Size = UDim2.new(0, 20, 0, 20)
+CloseBtn.Position = UDim2.new(1, -26, 0, 5)
+CloseBtn.BackgroundColor3 = Color3.fromRGB(70, 25, 25)
+CloseBtn.Text = "×"
+CloseBtn.TextColor3 = Color3.fromRGB(255, 130, 130)
+CloseBtn.TextSize = 14
+CloseBtn.Font = Enum.Font.GothamBold
+CloseBtn.BorderSizePixel = 0
+CloseBtn.Parent = TitleBar
+
+local CloseCorner = Instance.new("UICorner")
+CloseCorner.CornerRadius = UDim.new(0, 4)
+CloseCorner.Parent = CloseBtn
+
+CloseBtn.MouseButton1Click:Connect(function()
+    Sound:Stop()
+    ScreenGui:Destroy()
+end)
+
+-- 드래그 처리 (TitleBar 전용)
+local dragging = false
+local dragStart, startPos
+
+TitleBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = Frame.Position
+    end
+end)
+
+TitleBar.InputEnded:Connect(function(input)
