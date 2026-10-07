@@ -1,0 +1,310 @@
+-- =============================================
+-- Yuna hub - 드리프트킥 특화판 (파스텔 테마 적용)
+-- =============================================
+
+local Players = game:GetService("Players")
+local TextChatService = game:GetService("TextChatService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
+
+local Player = Players.LocalPlayer
+
+-- ====================================================
+-- 1. Orion UI 의 소스 획득 (원본 주소 유지)
+-- ====================================================
+local rawOrion = game:HttpGet("https://raw.githubusercontent.com/Siro-script/FtaP.90hub/refs/heads/main/Orion")
+
+-- ====================================================
+-- 2. 채팅 전송
+-- ====================================================
+if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
+    local textChannel = TextChatService.TextChannels:FindFirstChild("RBXGeneral")
+    if textChannel then
+        textChannel:SendAsync("[Yuna hub private🌼]")
+    end
+else
+    local rbxLegacyChat = ReplicatedStorage:FindFirstChild("DefaultChatSystemChatEvents")
+    if rbxLegacyChat then
+        local sayMessage = rbxLegacyChat:FindFirstChild("SayMessageRequest")
+        if sayMessage and sayMessage:IsA("RemoteEvent") then
+            sayMessage:FireServer("[Yuna hub private🌼]", "All")
+        end
+    end
+end
+
+-- ====================================================
+-- 3. Orion UI 설정 & 파스텔 테마 적용
+-- ====================================================
+rawOrion = string.gsub(rawOrion, "Notifications%.Position = UDim2%.new%(1, %-20, 1, %-20%)", "Notifications.Position = UDim2.new(1, -15, 0, 10)")
+rawOrion = string.gsub(rawOrion, "Notifications%.AnchorPoint = Vector2%.new%(1, 1%)", "Notifications.AnchorPoint = Vector2.new(1, 0)")
+rawOrion = string.gsub(rawOrion, "VerticalAlignment = Enum%.VerticalAlignment%.Bottom", "VerticalAlignment = Enum.VerticalAlignment.Top")
+
+local OrionLib = loadstring(rawOrion)()
+
+-- ★ 파스텔 톤 커스텀 테마 정의
+OrionLib.Themes.Pastel = {
+    Main = Color3.fromRGB(38, 34, 45),       -- 어두운 파스텔 바탕
+    Second = Color3.fromRGB(52, 46, 60),     -- 슬라이더/버튼 배경
+    Stroke = Color3.fromRGB(80, 70, 95),     -- 테두리 선
+    Divider = Color3.fromRGB(80, 70, 95),    -- 구분선
+    Text = Color3.fromRGB(245, 240, 250),    -- 메인 텍스트
+    SubText = Color3.fromRGB(190, 180, 205), -- 보조 텍스트
+    Accent = Color3.fromRGB(225, 175, 215)   -- ★ 파스텔 핑크/연보라 포인트
+}
+
+-- ====================================================
+-- 4. 윈도우 생성 (파스텔 테마 적용)
+-- ====================================================
+local Window = OrionLib:MakeWindow({
+    Name = "[Yuna hub private🌼]",
+    HidePremium = false,
+    SaveConfig = false,
+    IntroText = "[Yuna hub private🌼]",
+    Theme = "Pastel" -- ★ 파스텔 테마 지정
+})
+
+OrionLib:Init()
+
+OrionLib:MakeNotification({
+    Name = "[Yuna hub private🌼]",
+    Content = "실행 완료",
+    Image = "rbxassetid://4483345998",
+    Time = 3
+})
+
+-- ==============================================================================
+-- 드리프트킥 탭
+-- ==============================================================================
+
+local TargetTab = Window:MakeTab({
+    Name = "드리프트킥",
+    Icon = "rbxassetid://7733916988",
+    PremiumOnly = false
+})
+
+-- ==========================================
+-- 변수 & 서비스
+-- ==========================================
+local playerMap = {}
+local selectedActionTargetName = ""
+local driftRunning = false
+local currentLoopId = 0
+
+-- ★ 드리프트 조정용 변수 ★
+local driftRadius = 19       -- 너비(반경)
+local driftSpeed = 12        -- 회전 속도
+local driftHeightOffset = 0  -- 높이
+local driftCenterHeight = 30 -- 타겟 중심 높이
+local driftGrabCount = 2     -- 잡는 횟수 (드롭 횟수)
+local driftGrabInterval = 0.8 -- 다시 잡기 간격
+local driftAngle = 0
+
+-- ==========================================
+-- 플레이어 리스트 획득
+-- ==========================================
+local function getPlayerList()
+    local names = {}
+    playerMap = {}
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= Player then
+            local displayStr = player.DisplayName .. " (@" .. player.Name .. ")"
+            table.insert(names, displayStr)
+            playerMap[displayStr] = player.Name
+        end
+    end
+    if #names == 0 then table.insert(names, "(None)") end
+    return names
+end
+
+-- ==========================================
+-- UI
+-- ==========================================
+local targetDropdown = TargetTab:AddDropdown({
+    Name = "타겟 선택",
+    Default = "",
+    Options = getPlayerList(),
+    Callback = function(val)
+        selectedActionTargetName = playerMap[val] or ""
+    end
+})
+
+TargetTab:AddButton({
+    Name = "🔄 플레이어 리스트 갱신",
+    Callback = function()
+        targetDropdown:Refresh(getPlayerList(), true)
+        OrionLib:MakeNotification({Name="[Yuna hub private🌼]", Content="리스트 갱신 완료", Time=2})
+    end
+})
+
+-- ==========================================
+-- ★ 드리프트 상세 설정 세션 ★
+-- ==========================================
+TargetTab:AddSection({ Name = "⚙️ 드리프트 설정" })
+
+-- 슬라이더 색상도 파스텔 계열로 조화롭게 변경
+TargetTab:AddSlider({
+    Name = "너비 (반경)",
+    Min = 1,
+    Max = 100,
+    Default = 19,
+    Color = Color3.fromRGB(255, 175, 190), -- 파스텔 핑크
+    Increment = 1,
+    ValueName = "studs",
+    Callback = function(v)
+        driftRadius = v
+    end
+})
+
+TargetTab:AddSlider({
+    Name = "회전 속도",
+    Min = 0.1,
+    Max = 100,
+    Default = 12,
+    Color = Color3.fromRGB(160, 210, 255), -- 파스텔 블루
+    Increment = 0.1,
+    ValueName = "",
+    Callback = function(v)
+        driftSpeed = v
+    end
+})
+
+TargetTab:AddSlider({
+    Name = "높이 (상하 오프셋)",
+    Min = -50,
+    Max = 100,
+    Default = 0,
+    Color = Color3.fromRGB(180, 235, 190), -- 파스텔 민트
+    Increment = 1,
+    ValueName = "studs",
+    Callback = function(v)
+        driftHeightOffset = v
+    end
+})
+
+TargetTab:AddSlider({
+    Name = "중심 높이 (타겟 기준)",
+    Min = 0,
+    Max = 100,
+    Default = 30,
+    Color = Color3.fromRGB(255, 230, 160), -- 파스텔 옐로우
+    Increment = 1,
+    ValueName = "studs",
+    Callback = function(v)
+        driftCenterHeight = v
+    end
+})
+
+TargetTab:AddSlider({
+    Name = "잡는 횟수 (드롭 횟수)",
+    Min = 1,
+    Max = 20,
+    Default = 2,
+    Color = Color3.fromRGB(225, 175, 215), -- 파스텔 라벤더
+    Increment = 1,
+    ValueName = "회",
+    Callback = function(v)
+        driftGrabCount = v
+    end
+})
+
+TargetTab:AddSlider({
+    Name = "다시 잡기 간격",
+    Min = 0.1,
+    Max = 5,
+    Default = 0.8,
+    Color = Color3.fromRGB(210, 205, 220), -- 파스텔 연회색
+    Increment = 0.05,
+    ValueName = "초",
+    Callback = function(v)
+        driftGrabInterval = v
+    end
+})
+
+-- ==========================================
+-- ★ Drift Kick ★
+-- ==========================================
+TargetTab:AddToggle({
+    Name = "Drift Kick",
+    Default = false,
+    Callback = function(v)
+        driftRunning = v
+        currentLoopId = currentLoopId + 1
+        local myLoopId = currentLoopId
+        if not v then return end
+
+        local target = Players:FindFirstChild(selectedActionTargetName)
+        if target and target ~= Player then
+            local blobman = nil
+            local spawned = Workspace:FindFirstChild(Player.Name .. "SpawnedInToys")
+            if spawned then blobman = spawned:FindFirstChild("CreatureBlobman") end
+
+            if not blobman then
+                local mt = ReplicatedStorage:FindFirstChild("MenuToys")
+                local st = mt and mt:FindFirstChild("SpawnToyRemoteFunction")
+                if st then
+                    local myRoot = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
+                    local spawnCF = myRoot and (myRoot.CFrame + Vector3.new(0, 5, 0)) or CFrame.new(0, 50, 0)
+                    st:InvokeServer("CreatureBlobman", spawnCF, Vector3.zero)
+                    task.wait(0.8)
+                    spawned = Workspace:FindFirstChild(Player.Name .. "SpawnedInToys")
+                    if spawned then blobman = spawned:FindFirstChild("CreatureBlobman") end
+                end
+            end
+
+            if not blobman then
+                for _, obj in ipairs(Workspace:GetChildren()) do
+                    if obj.Name == "CreatureBlobman" and obj:FindFirstChild("VehicleSeat") then
+                        blobman = obj
+                        break
+                    end
+                end
+            end
+
+            if blobman then
+                local scriptObj = blobman:FindFirstChild("BlobmanSeatAndOwnerScript") or blobman:FindFirstChild("BlobmanSeatAndOwnerScript[old]")
+                local grabRemote = scriptObj and scriptObj:FindFirstChild("CreatureGrab") or blobman:FindFirstChild("CreatureGrab", true)
+                local dropRemote = scriptObj and scriptObj:FindFirstChild("CreatureDrop") or blobman:FindFirstChild("CreatureDrop", true)
+                local lDet = blobman:FindFirstChild("LeftDetector")
+                local rDet = blobman:FindFirstChild("RightDetector")
+                local lWeld = lDet and (lDet:FindFirstChild("LeftWeld") or lDet:FindFirstChildWhichIsA("Weld") or lDet:FindFirstChildWhichIsA("JointInstance") or lDet:FindFirstChild("RigidConstraint"))
+                local rWeld = rDet and (rDet:FindFirstChild("RightWeld") or rDet:FindFirstChildWhichIsA("Weld") or rDet:FindFirstChildWhichIsA("JointInstance") or rDet:FindFirstChild("RigidConstraint"))
+                local seat = blobman:FindFirstChild("VehicleSeat")
+                local hum = Player.Character and Player.Character:FindFirstChild("Humanoid")
+
+                if seat and hum then
+                    if seat.Occupant ~= hum then
+                        Player.Character.HumanoidRootPart.CFrame = seat.CFrame + Vector3.new(0, 2, 0)
+                        task.wait(0.2)
+                        seat:Sit(hum)
+                        task.wait(0.5)
+                    end
+                end
+
+                local GE = ReplicatedStorage:FindFirstChild("GrabEvents")
+                if GE and grabRemote and dropRemote and ((lDet and lWeld) or (rDet and rWeld)) then
+                    OrionLib:MakeNotification({ Name = "[Yuna hub private🌼]", Content = "Drift Kick 시작", Time = 3 })
+
+                    task.spawn(function()
+                        local blobRoot = blobman:FindFirstChild("HumanoidRootPart") or blobman.PrimaryPart
+                        local Det = rDet or lDet
+                        local Weld = rWeld or lWeld
+
+                        while driftRunning do
+                            if myLoopId ~= currentLoopId then break end
+                            if not target or not target.Parent then break end
+
+                            local tChar = target.Character
+                            local tHum = tChar and tChar:FindFirstChild("Humanoid")
+                            local tRoot = tChar and tChar:FindFirstChild("HumanoidRootPart")
+
+                            if tChar and tRoot and tHum and tHum.Health > 0 then
+                                local bringStart = tick()
+                                while tick() - bringStart < 0.35 do
+                                    if myLoopId ~= currentLoopId or not driftRunning or not blobman or not blobman.Parent then break end
+                                    if target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+                                        local currentTRoot = target.Character.HumanoidRootPart
+                                        blobRoot.CFrame = currentTRoot.CFrame
+                                        blobRoot.AssemblyLinearVelocity = Vector3.zero
+                                        pcall(function()
+                                            if Det then grabRemote:Fire
