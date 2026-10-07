@@ -1,0 +1,93 @@
+-- =============================================
+-- Yuna hub - 드리프트킥 특화판 (모바일 파스텔 호환)
+-- =============================================
+
+local Players = game:GetService("Players")
+local TextChatService = game:GetService("TextChatService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
+
+local Player = Players.LocalPlayer
+
+-- ====================================================
+-- 1. Orion UI 소스 획득 & 색상 파스텔 치환 (모바일 호환)
+-- ====================================================
+local rawOrion = game:HttpGet("https://raw.githubusercontent.com/Siro-script/FtaP.90hub/refs/heads/main/Orion")
+
+-- 모바일 알림 위치 조정
+rawOrion = string.gsub(rawOrion, "Notifications%.Position = UDim2%.new%(1, %-20, 1, %-20%)", "Notifications.Position = UDim2.new(1, -15, 0, 10)")
+rawOrion = string.gsub(rawOrion, "Notifications%.AnchorPoint = Vector2%.new%(1, 1%)", "Notifications.AnchorPoint = Vector2.new(1, 0)")
+rawOrion = string.gsub(rawOrion, "VerticalAlignment = Enum%.VerticalAlignment%.Bottom", "VerticalAlignment = Enum.VerticalAlignment.Top")
+
+-- ★ Orion 기본 테마 색상을 강제로 파스텔 톤으로 치환
+rawOrion = string.gsub(rawOrion, "Color3%.fromRGB%(25, 25, 25%)", "Color3.fromRGB(38, 34, 45)")    -- 메인 배경 (어두운 파스텔)
+rawOrion = string.gsub(rawOrion, "Color3%.fromRGB%(32, 32, 32%)", "Color3.fromRGB(52, 46, 60)")    -- 요소 배경
+rawOrion = string.gsub(rawOrion, "Color3%.fromRGB%(255, 255, 255%)", "Color3.fromRGB(245, 240, 250)") -- 텍스트 (파스텔 화이트)
+rawOrion = string.gsub(rawOrion, "Color3%.fromRGB%(0, 140, 255%)", "Color3.fromRGB(225, 175, 215)")  -- 포인트 색상 (파스텔 핑크/연보라)
+
+local OrionLib = loadstring(rawOrion)()
+
+-- ====================================================
+-- 2. 채팅 전송
+-- ====================================================
+pcall(function()
+    if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
+        local textChannel = TextChatService.TextChannels:FindFirstChild("RBXGeneral")
+        if textChannel then
+            textChannel:SendAsync("[Yuna hub private🌼]")
+        end
+    else
+        local rbxLegacyChat = ReplicatedStorage:FindFirstChild("DefaultChatSystemChatEvents")
+        if rbxLegacyChat then
+            local sayMessage = rbxLegacyChat:FindFirstChild("SayMessageRequest")
+            if sayMessage and sayMessage:IsA("RemoteEvent") then
+                sayMessage:FireServer("[Yuna hub private🌼]", "All")
+            end
+        end
+    end
+end)
+
+-- ====================================================
+-- 3. 윈도우 생성
+-- ====================================================
+local Window = OrionLib:MakeWindow({
+    Name = "[Yuna hub private🌼]",
+    HidePremium = false,
+    SaveConfig = false,
+    IntroText = "[Yuna hub private🌼]"
+})
+
+OrionLib:Init()
+
+OrionLib:MakeNotification({
+    Name = "[Yuna hub private🌼]",
+    Content = "실행 완료",
+    Image = "rbxassetid://4483345998",
+    Time = 3
+})
+
+-- ==============================================================================
+-- 드리프트킥 탭
+-- ==============================================================================
+
+local TargetTab = Window:MakeTab({
+    Name = "드리프트킥",
+    Icon = "rbxassetid://7733916988",
+    PremiumOnly = false
+})
+
+-- ==========================================
+-- 변수 & 서비스
+-- ==========================================
+local playerMap = {}
+local selectedActionTargetName = ""
+local driftRunning = false
+local currentLoopId = 0
+
+-- ★ 드리프트 조정용 변수 ★
+local driftRadius = 19       -- 너비(반경)
+local driftSpeed = 12        -- 회전 속도
+local driftHeightOffset = 0  -- 높이
+local driftCenterHeight = 30 -- 타겟 중심 높이
+local driftGrabCount = 2     -- 잡는 횟수
