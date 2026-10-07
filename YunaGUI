@@ -1,0 +1,263 @@
+-- Delta에서 실행할 코드
+-- Yuna GUI + 시야각(FOV) 120 고정
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+
+-- ★ 실행 시 FOV를 120으로 고정
+local Camera = workspace.CurrentCamera
+if Camera then
+    Camera.FieldOfView = 120
+end
+workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
+    local cam = workspace.CurrentCamera
+    if cam then cam.FieldOfView = 120 end
+end)
+
+-- GUI 생성 (CoreGui 접근 실패 시 PlayerGui로 백업)
+local parentGui = game:GetService("CoreGui")
+local success, _ = pcall(function() local _ = game.CoreGui.Name end)
+if not success then
+    parentGui = LocalPlayer:WaitForChild("PlayerGui")
+end
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "Yuna GUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = parentGui
+
+-- 사운드
+local Sound = Instance.new("Sound")
+Sound.Name = "Yuna GUI Sound"
+Sound.SoundId = "rbxassetid://128522658645123"
+Sound.Volume = 2
+Sound.Looped = false
+Sound.Parent = ScreenGui
+
+-- 메인 프레임
+local Frame = Instance.new("Frame")
+Frame.Size = UDim2.new(0, 300, 0, 220)
+Frame.Position = UDim2.new(0.5, -150, 0.5, -110)
+Frame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+Frame.BorderSizePixel = 0
+Frame.Active = false
+Frame.Parent = ScreenGui
+
+local FrameCorner = Instance.new("UICorner")
+FrameCorner.CornerRadius = UDim.new(0, 8)
+FrameCorner.Parent = Frame
+
+local FrameStroke = Instance.new("UIStroke")
+FrameStroke.Thickness = 1
+FrameStroke.Color = Color3.fromRGB(80, 80, 80)
+FrameStroke.Parent = Frame
+
+-- 타이틀 바 (드래그용)
+local TitleBar = Instance.new("Frame")
+TitleBar.Size = UDim2.new(1, 0, 0, 30)
+TitleBar.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+TitleBar.BorderSizePixel = 0
+TitleBar.Active = true
+TitleBar.Parent = Frame
+
+local TitleCorner = Instance.new("UICorner")
+TitleCorner.CornerRadius = UDim.new(0, 8)
+TitleCorner.Parent = TitleBar
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, -40, 1, 0)
+Title.Position = UDim2.new(0, 10, 0, 0)
+Title.BackgroundTransparency = 1
+Title.Text = "Yuna GUI"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextSize = 14
+Title.Font = Enum.Font.GothamBold
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.Parent = TitleBar
+
+-- 닫기 버튼
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Size = UDim2.new(0, 20, 0, 20)
+CloseBtn.Position = UDim2.new(1, -26, 0, 5)
+CloseBtn.BackgroundColor3 = Color3.fromRGB(70, 25, 25)
+CloseBtn.Text = "×"
+CloseBtn.TextColor3 = Color3.fromRGB(255, 130, 130)
+CloseBtn.TextSize = 14
+CloseBtn.Font = Enum.Font.GothamBold
+CloseBtn.BorderSizePixel = 0
+CloseBtn.Parent = TitleBar
+
+local CloseCorner = Instance.new("UICorner")
+CloseCorner.CornerRadius = UDim.new(0, 4)
+CloseCorner.Parent = CloseBtn
+
+CloseBtn.MouseButton1Click:Connect(function()
+    Sound:Stop()
+    ScreenGui:Destroy()
+end)
+
+-- 드래그 처리 (TitleBar 전용)
+local dragging = false
+local dragStart, startPos
+
+TitleBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = Frame.Position
+    end
+end)
+
+TitleBar.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = false
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
+        or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = input.Position - dragStart
+        Frame.Position = UDim2.new(
+            startPos.X.Scale, startPos.X.Offset + delta.X,
+            startPos.Y.Scale, startPos.Y.Offset + delta.Y
+        )
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = false
+    end
+end)
+
+-- FPS 표시
+local FpsLabel = Instance.new("TextLabel")
+FpsLabel.Size = UDim2.new(1, -20, 0, 20)
+FpsLabel.Position = UDim2.new(0, 10, 0, 40)
+FpsLabel.BackgroundTransparency = 1
+FpsLabel.Text = "FPS: --"
+FpsLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+FpsLabel.TextSize = 13
+FpsLabel.Font = Enum.Font.Code
+FpsLabel.TextXAlignment = Enum.TextXAlignment.Left
+FpsLabel.Parent = Frame
+
+-- 유저 이름 표시
+local NameLabel = Instance.new("TextLabel")
+NameLabel.Size = UDim2.new(1, -20, 0, 20)
+NameLabel.Position = UDim2.new(0, 10, 0, 62)
+NameLabel.BackgroundTransparency = 1
+NameLabel.Text = "유저: " .. LocalPlayer.Name
+NameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+NameLabel.TextSize = 13
+NameLabel.Font = Enum.Font.Code
+NameLabel.TextXAlignment = Enum.TextXAlignment.Left
+NameLabel.Parent = Frame
+
+-- 사운드 버튼
+local SoundBtn = Instance.new("TextButton")
+SoundBtn.Size = UDim2.new(1, -20, 0, 40)
+SoundBtn.Position = UDim2.new(0, 10, 0, 95)
+SoundBtn.BackgroundColor3 = Color3.fromRGB(110, 110, 110)
+SoundBtn.Text = "사운드"
+SoundBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+SoundBtn.TextSize = 14
+SoundBtn.Font = Enum.Font.GothamBold
+SoundBtn.BorderSizePixel = 0
+SoundBtn.Parent = Frame
+
+local SoundCorner = Instance.new("UICorner")
+SoundCorner.CornerRadius = UDim.new(0, 6)
+SoundCorner.Parent = SoundBtn
+
+local SoundStroke = Instance.new("UIStroke")
+SoundStroke.Thickness = 1
+SoundStroke.Color = Color3.fromRGB(160, 160, 160)
+SoundStroke.Parent = SoundBtn
+
+local playing = false
+SoundBtn.MouseButton1Click:Connect(function()
+    if not playing then
+        Sound:Play()
+        playing = true
+        SoundBtn.Text = "정지"
+        SoundBtn.TextColor3 = Color3.fromRGB(255, 130, 130)
+    else
+        Sound:Stop()
+        playing = false
+        SoundBtn.Text = "사운드"
+        SoundBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    end
+end)
+
+Sound.Ended:Connect(function()
+    playing = false
+    SoundBtn.Text = "사운드"
+    SoundBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+end)
+
+-- 축소 버튼
+local ShrinkBtn = Instance.new("TextButton")
+ShrinkBtn.Size = UDim2.new(1, -20, 0, 40)
+ShrinkBtn.Position = UDim2.new(0, 10, 0, 145)
+ShrinkBtn.BackgroundColor3 = Color3.fromRGB(110, 110, 110)
+ShrinkBtn.Text = "축소"
+ShrinkBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ShrinkBtn.TextSize = 14
+ShrinkBtn.Font = Enum.Font.GothamBold
+ShrinkBtn.BorderSizePixel = 0
+ShrinkBtn.Parent = Frame
+
+local ShrinkCorner = Instance.new("UICorner")
+ShrinkCorner.CornerRadius = UDim.new(0, 6)
+ShrinkCorner.Parent = ShrinkBtn
+
+local ShrinkStroke = Instance.new("UIStroke")
+ShrinkStroke.Thickness = 1
+ShrinkStroke.Color = Color3.fromRGB(160, 160, 160)
+ShrinkStroke.Parent = ShrinkBtn
+
+-- ★ 축소 시 우측 상단에 표시되는 흑백 □ 버튼
+local RestoreBtn = Instance.new("TextButton")
+RestoreBtn.Size = UDim2.new(0, 18, 0, 18)
+RestoreBtn.Position = UDim2.new(1, -22, 0, 1)
+RestoreBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+RestoreBtn.Text = "□"
+RestoreBtn.TextColor3 = Color3.fromRGB(0, 0, 0)
+RestoreBtn.TextSize = 12
+RestoreBtn.Font = Enum.Font.GothamBold
+RestoreBtn.BorderSizePixel = 1
+RestoreBtn.BorderColor3 = Color3.fromRGB(0, 0, 0)
+RestoreBtn.Visible = false
+RestoreBtn.Parent = Frame
+
+local RestoreCorner = Instance.new("UICorner")
+RestoreCorner.CornerRadius = UDim.new(0, 4)
+RestoreCorner.Parent = RestoreBtn
+
+-- 축소/복원
+local shrunk = false
+
+local SHRUNK_SIZE = UDim2.new(0, 260, 0, 20)
+local SHRUNK_POS  = UDim2.new(0.5, -130, 0, 20)
+local NORMAL_SIZE = UDim2.new(0, 300, 0, 220)
+local NORMAL_POS  = UDim2.new(0.5, -150, 0.5, -110)
+
+local function shrink()
+    shrunk = true
+
+    TweenService:Create(Frame, TweenInfo.new(0.35, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+        Size = SHRUNK_SIZE,
+        Position = SHRUNK_POS,
+    }):Play()
+
+    -- TitleBar를 축소된 크기에 맞춤
+    TweenService:Create(TitleBar, TweenInfo.new(0.35, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+        Size = UDim2.new(1, 0, 1, 0),
